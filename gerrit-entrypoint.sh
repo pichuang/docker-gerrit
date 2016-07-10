@@ -1,12 +1,12 @@
-#!/bin/bash
+#!/usr/bin/env sh
 set -e
 
-function set_gerrit_config {
-  gosu ${GERRIT_USER} git config -f "${GERRIT_SITE}/etc/gerrit.config" $@
+set_gerrit_config() {
+  gosu ${GERRIT_USER} git config -f "${GERRIT_SITE}/etc/gerrit.config" "$@"
 }
 
-function set_secure_config {
-  gosu ${GERRIT_USER} git config -f "${GERRIT_SITE}/etc/secure.config" $@
+set_secure_config() {
+  gosu ${GERRIT_USER} git config -f "${GERRIT_SITE}/etc/secure.config" "$@"
 }
 
 #Initialize gerrit if gerrit site dir is empty.
@@ -28,6 +28,10 @@ if [ "$1" = "/gerrit-start.sh" ]; then
   # Install external plugins
   cp -f ${GERRIT_HOME}/delete-project.jar ${GERRIT_SITE}/plugins/delete-project.jar
   cp -f ${GERRIT_HOME}/events-log.jar ${GERRIT_SITE}/plugins/events-log.jar
+
+  # Install the Bouncy Castle
+  cp -f ${GERRIT_HOME}/bcprov-jdk15on-${BOUNCY_CASTLE_VERSION}.jar ${GERRIT_SITE}/lib/bcprov-jdk15on-${BOUNCY_CASTLE_VERSION}.jar
+  cp -f ${GERRIT_HOME}/bcpkix-jdk15on-${BOUNCY_CASTLE_VERSION}.jar ${GERRIT_SITE}/lib/bcpkix-jdk15on-${BOUNCY_CASTLE_VERSION}.jar
 
   # Provide a way to customise this image
   echo
@@ -65,7 +69,7 @@ if [ "$1" = "/gerrit-start.sh" ]; then
   fi
 
   #Section ldap
-  if [ "${AUTH_TYPE}" = 'LDAP' ]; then
+  if [ "${AUTH_TYPE}" = 'LDAP' ] || [ "${AUTH_TYPE}" = 'LDAP_BIND' ] ; then
     set_gerrit_config auth.type "${AUTH_TYPE}"
     set_gerrit_config auth.gitBasicAuth true
     [ -z "${LDAP_SERVER}" ]                   || set_gerrit_config ldap.server "ldap://${LDAP_SERVER}"
@@ -94,6 +98,29 @@ if [ "$1" = "/gerrit-start.sh" ]; then
     [ -z "${LDAP_CONNECTTIMEOUT}" ]           || set_gerrit_config ldap.connectTimeout "${LDAP_CONNECTTIMEOUT}"
   fi
 
+  # section OAUTH general
+  if [ "${AUTH_TYPE}" = 'OAUTH' ]  ; then
+    cp -f ${GERRIT_HOME}/gerrit-oauth-provider.jar ${GERRIT_SITE}/plugins/gerrit-oauth-provider.jar
+    set_gerrit_config auth.type "${AUTH_TYPE}"
+    [ -z "${OAUTH_ALLOW_EDIT_FULL_NAME}" ]     || set_gerrit_config oauth.allowEditFullName "${OAUTH_ALLOW_EDIT_FULL_NAME}"
+    [ -z "${OAUTH_ALLOW_REGISTER_NEW_EMAIL}" ] || set_gerrit_config oauth.allowRegisterNewEmail "${OAUTH_ALLOW_REGISTER_NEW_EMAIL}"
+
+    # Google
+    [ -z "${OAUTH_GOOGLE_RESTRICT_DOMAIN}" ]   || set_gerrit_config plugin.gerrit-oauth-provider-google-oauth.domain "${OAUTH_GOOGLE_RESTRICT_DOMAIN}"
+    [ -z "${OAUTH_GOOGLE_CLIENT_ID}" ]         || set_gerrit_config plugin.gerrit-oauth-provider-google-oauth.client-id "${OAUTH_GOOGLE_CLIENT_ID}"
+    [ -z "${OAUTH_GOOGLE_CLIENT_SECRET}" ]     || set_gerrit_config plugin.gerrit-oauth-provider-google-oauth.client-secret "${OAUTH_GOOGLE_CLIENT_SECRET}"
+    [ -z "${OAUTH_GOOGLE_LINK_OPENID}" ]       || set_gerrit_config plugin.gerrit-oauth-provider-google-oauth.link-to-existing-openid-accounts "${OAUTH_GOOGLE_LINK_OPENID}"
+
+    # Github
+    [ -z "${OAUTH_GITHUB_CLIENT_ID}" ]         || set_gerrit_config plugin.gerrit-oauth-provider-github-oauth.client-id "${OAUTH_GITHUB_CLIENT_ID}"
+    [ -z "${OAUTH_GITHUB_CLIENT_SECRET}" ]     || set_gerrit_config plugin.gerrit-oauth-provider-github-oauth.client-secret "${OAUTH_GITHUB_CLIENT_SECRET}"
+  fi
+
+  # section DEVELOPMENT_BECOME_ANY_ACCOUNT
+  if [ "${AUTH_TYPE}" = 'DEVELOPMENT_BECOME_ANY_ACCOUNT' ]  ; then
+    set_gerrit_config auth.type "${AUTH_TYPE}"
+  fi
+
   # section container
   [ -z "${JAVA_HEAPLIMIT}" ] || set_gerrit_config container.heapLimit "${JAVA_HEAPLIMIT}"
   [ -z "${JAVA_OPTIONS}" ]   || set_gerrit_config container.javaOptions "${JAVA_OPTIONS}"
@@ -103,6 +130,7 @@ if [ "$1" = "/gerrit-start.sh" ]; then
   if [ -z "${SMTP_SERVER}" ]; then
     set_gerrit_config sendemail.enable false
   else
+    set_gerrit_config sendemail.enable true
     set_gerrit_config sendemail.smtpServer "${SMTP_SERVER}"
     if [ "smtp.gmail.com" = "${SMTP_SERVER}" ]; then
       echo "gmail detected, using default port and encryption"
@@ -127,6 +155,9 @@ if [ "$1" = "/gerrit-start.sh" ]; then
 
   #Section httpd
   [ -z "${HTTPD_LISTENURL}" ] || set_gerrit_config httpd.listenUrl "${HTTPD_LISTENURL}"
+
+  #Section gitweb
+  set_gerrit_config gitweb.cgi "/usr/share/gitweb/gitweb.cgi"
 
   echo "Upgrading gerrit..."
   gosu ${GERRIT_USER} java -jar "${GERRIT_WAR}" init --batch -d "${GERRIT_SITE}" ${GERRIT_INIT_ARGS}

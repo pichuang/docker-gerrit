@@ -1,17 +1,18 @@
 # Gerrit Docker image
  The Gerrit code review system with PostgreSQL and OpenLDAP integration supported.
+ This image is based on the Alpine Linux project which makes this image smaller and faster than before.
 
 ## Versions
- openfrontier/gerrit:latest -> 2.11.4
+ openfrontier/gerrit:latest -> 2.12.2
+
+ openfrontier/gerrit:2.11.x -> 2.11.8
 
  openfrontier/gerrit:2.10.x -> 2.10.6
-
- openfrontier/gerrit:2.9.x -> 2.9.4
 
 ## Container Quickstart
   1. Initialize and start gerrit.
 
-    `$ docker run -d -p 8080:8080 -p 29418:29418 openfrontier/gerrit`
+    `docker run -d -p 8080:8080 -p 29418:29418 openfrontier/gerrit`
 
   2. Open your browser to http://<docker host url>:8080
 
@@ -35,6 +36,9 @@
 
 ## Install plugins on start.
   When calling gerrit init --batch, it is possible to list plugins to be installed with --install-plugin=<plugin_name>. This can be done using the GERRIT_INIT_ARGS environment variable. See [Gerrit Documentation](https://gerrit-review.googlesource.com/Documentation/pgm-init.html) for more information.
+
+     #Install download-commands plugin on start
+     docker run -d -p 8080:8080 -p 29418:29418 -e GERRIT_INIT_ARGS='--install-plugin=download-commands' openfrontier/gerrit
 
 ## Extend this image.
   Similarly to the [Postgres](https://hub.docker.com/_/postgres/) image, if you would like to do additional configuration mid-script, add one or more
@@ -60,7 +64,7 @@
     -p 8080:8080 \
     -p 29418:29418 \
     -e WEBURL=http://<your.site.url>:8080 \
-    -e DATABASE_TYPE=postgresql 
+    -e DATABASE_TYPE=postgresql \
     -e AUTH_TYPE=LDAP \
     -e LDAP_SERVER=<ldap-servername> \
     -e LDAP_ACCOUNTBASE=<ldap-basedn> \
@@ -98,6 +102,34 @@
     -e WEBURL=http://<your.site.url>:8080 \
     -e USER_NAME=gerrit \
     -e USER_EMAIL=<gerrit@your.site.domain> \
+    -d openfrontier/gerrit
+
+## Setup OAUTH options
+    docker run \
+    --name gerrit \
+    -p 8080:8080 \
+    -p 29418:29418 \
+    -e AUTH_TYPE=OAUTH \
+    -e OAUTH_ALLOW_EDIT_FULL_NAME=true \
+    -e OAUTH_ALLOW_REGISTER_NEW_EMAIL=true \
+    -e OAUTH_GOOGLE_RESTRICT_DOMAIN=your.site.domain> \
+    -e OAUTH_GOOGLE_CLIENT_ID=1234567890 \
+    -e OAUTH_GOOGLE_CLIENT_SECRET=dakjhsknksbvskewu-googlesecret \
+    -e OAUTH_GOOGLE_LINK_OPENID=true \
+    -e OAUTH_GITHUB_CLIENT_ID=abcdefg \
+    -e OAUTH_GITHUB_CLIENT_SECRET=secret123 \
+    -d openfrontier/gerrit
+
+KNOWN ISSUE'S: The current OAUTH plugin is not up to date (2.11.3) test or compile the latest version from the website: https://github.com/davido/gerrit-oauth-provider
+
+## Setup DEVELOPMENT_BECOME_ANY_ACCOUNT option
+**DO NOT USE.** Only for use in a development environment.
+When this is the configured authentication method a hyperlink titled Become appears in the top right corner of the page, taking the user to a form where they can enter the username of any existing user account, and immediately login as that account, without any authentication taking place. This form of authentication is only useful for the GWT hosted mode shell, where OpenID authentication redirects might be risky to the developer's host computer, and HTTP authentication is not possible.
+    docker run \
+    --name gerrit \
+    -p 8080:8080 \
+    -p 29418:29418 \
+    -e AUTH_TYPE=DEVELOPMENT_BECOME_ANY_ACCOUNT \
     -d openfrontier/gerrit
 
 ## Sample operational scripts
